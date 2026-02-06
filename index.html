@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スタディGO・パーソナル - デモ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+    body { font-family: 'Noto Sans JP', sans-serif; }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(0.8); opacity: 1; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+    .pulse-ring { animation: pulse-ring 1.5s ease-out infinite; }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+    .float { animation: float 3s ease-in-out infinite; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .slide-in { animation: slideIn 0.5s ease-out forwards; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+
+    @keyframes progressFill {
+      from { width: 0; }
+    }
+    .progress-fill { animation: progressFill 1s ease-out forwards; }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    .bounce { animation: bounce 0.6s ease-in-out; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            // スタディGOブランドカラー
+            studygo: {
+              mint: '#E0F7F6',
+              mintLight: '#F0FAFA',
+              cyan: '#00B4D8',
+              cyanLight: '#48CAE4',
+              cyanDark: '#0096C7',
+              blue: '#0077B6',
+              orange: '#F9A825',
+              orangeLight: '#FFD54F',
+              text: '#333333',
+              textLight: '#666666',
+              textMuted: '#999999',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-studygo-mint min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // API設定
+    const API_BASE_URL = "http://localhost:3011";
+
+    // Lucide Icons as React components
+    const Icon = ({ name, size = 24, className = "" }) => {
+      const ref = useRef(null);
+      useEffect(() => {
+        if (ref.current) {
+          ref.current.innerHTML = '';
+          const icon = lucide.createElement(lucide.icons[name]);
+          icon.setAttribute('width', size);
+          icon.setAttribute('height', size);
+          if (className) icon.setAttribute('class', className);
+          ref.current.appendChild(icon);
+        }
+      }, [name, size, className]);
+      return <span ref={ref} className="inline-flex items-center justify-center" />;
+    };
+
+    // 都道府県マッピング
+    const prefectureNames = {
+      1: "北海道", 2: "青森県", 3: "岩手県", 4: "宮城県", 5: "秋田県", 6: "山形県", 7: "福島県",
+      8: "茨城県", 9: "栃木県", 10: "群馬県", 11: "埼玉県", 12: "千葉県", 13: "東京都", 14: "神奈川県",
+      15: "新潟県", 16: "富山県", 17: "石川県", 18: "福井県", 19: "山梨県", 20: "長野県",
+      21: "岐阜県", 22: "静岡県", 23: "愛知県", 24: "三重県", 25: "滋賀県", 26: "京都府",
+      27: "大阪府", 28: "兵庫県", 29: "奈良県", 30: "和歌山県", 31: "鳥取県", 32: "島根県",
+      33: "岡山県", 34: "広島県", 35: "山口県", 36: "徳島県", 37: "香川県", 38: "愛媛県",
+      39: "高知県", 40: "福岡県", 41: "佐賀県", 42: "長崎県", 43: "熊本県", 44: "大分県",
+      45: "宮崎県", 46: "鹿児島県", 47: "沖縄県"
+    };
+
+    // ダミーデータ（APIフォールバック用）
+    const dummyStores = [
+      { id: 1, name: "スタディGO 渋谷Scramble", city: "渋谷区", prefecture: 13, catchCopy: "駅直結で24時間利用可能な最新設備の学習スペース", reviewStar: 48, imageFileName: null },
+      { id: 2, name: "スタディGO 新宿West", city: "新宿区", prefecture: 13, catchCopy: "静音環境とカフェ併設でゆったり学習", reviewStar: 47, imageFileName: null },
+      { id: 3, name: "スタディGO 池袋East", city: "豊島区", prefecture: 13, catchCopy: "広々空間でグループ学習も可能", reviewStar: 46, imageFileName: null },
+    ];
+
+    const dummyPlans = [
+      { id: 1, name: "短期集中ブーストプラン", price: 29800, planType: 1, subTitle: "1ヶ月で結果を出す", note: "毎日3時間の集中学習、AIコーチング週3回", recommended: true },
+      { id: 2, name: "社会人夜間フル活用プラン", price: 19800, planType: 1, subTitle: "仕事帰りに学習", note: "平日18時以降利用、週末フリー利用", recommended: false },
+      { id: 3, name: "週末マスタープラン", price: 14800, planType: 1, subTitle: "週末だけで着実に", note: "土日祝日利用、月2回の対面指導", recommended: false },
+    ];
+
+    const roadmapPhases = [
+      { phase: 1, title: "基礎固め期", duration: "1-2週目", tasks: ["学習習慣の確立", "基礎知識のインプット", "目標の明確化"], progress: 100, icon: "Sprout" },
+      { phase: 2, title: "実践応用期", duration: "3-4週目", tasks: ["演習問題への挑戦", "弱点の特定と克服", "応用力の養成"], progress: 65, icon: "Zap" },
+      { phase: 3, title: "仕上げ期", duration: "5-6週目", tasks: ["総復習", "模擬テスト", "本番対策"], progress: 30, icon: "Target" },
+      { phase: 4, title: "目標達成", duration: "7週目〜", tasks: ["成果の確認", "次のステップへ", "継続学習プラン"], progress: 0, icon: "Trophy" },
+    ];
+
+    // API呼び出し関数
+    const fetchShops = async (prefecture) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/app/shops`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prefecture: prefecture || undefined })
+        });
+        if (!response.ok) throw new Error('API Error');
+        const data = await response.json();
+        return data.data?.shops || [];
+      } catch (error) {
+        console.log('API unavailable, using dummy data:', error.message);
+        return null;
+      }
+    };
+
+    const fetchShopPlans = async (shopId) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/app/shopPlans`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shopId })
+        });
+        if (!response.ok) throw new Error('API Error');
+        const data = await response.json();
+        return data.data?.shopPlans || [];
+      } catch (error) {
+        console.log('API unavailable, using dummy data:', error.message);
+        return null;
+      }
+    };
+
+    // AIロボットイラストコンポーネント
+    const StudyIllustration = () => (
+      <svg viewBox="0 0 240 200" className="w-56 h-48 mx-auto float">
+        {/* 背景の円 */}
+        <circle cx="120" cy="100" r="70" fill="#E0F7F6" opacity="0.5" />
+
+        {/* ロボット本体 */}
+        <rect x="85" y="70" width="70" height="80" rx="20" fill="#00B4D8" />
+
+        {/* ロボットの顔 */}
+        <rect x="95" y="80" width="50" height="45" rx="10" fill="#FFF" />
+
+        {/* 目 */}
+        <circle cx="110" cy="100" r="8" fill="#333" />
+        <circle cx="130" cy="100" r="8" fill="#333" />
+        <circle cx="112" cy="98" r="3" fill="#FFF" />
+        <circle cx="132" cy="98" r="3" fill="#FFF" />
+
+        {/* 口（笑顔） */}
+        <path d="M108 115 Q120 125 132 115" stroke="#333" strokeWidth="3" fill="none" strokeLinecap="round" />
+
+        {/* アンテナ */}
+        <line x1="120" y1="70" x2="120" y2="50" stroke="#00B4D8" strokeWidth="4" />
+        <circle cx="120" cy="45" r="8" fill="#F9A825" />
+        <circle cx="120" cy="45" r="4" fill="#FFD54F" />
+
+        {/* 耳（サイドパネル） */}
+        <rect x="70" y="90" width="15" height="25" rx="5" fill="#0096C7" />
+        <rect x="155" y="90" width="15" height="25" rx="5" fill="#0096C7" />
+
+        {/* 本 */}
+        <rect x="75" y="155" width="90" height="12" rx="3" fill="#48CAE4" />
+        <rect x="80" y="145" width="80" height="10" rx="2" fill="#00B4D8" />
+        <rect x="85" y="137" width="70" height="8" rx="2" fill="#0096C7" />
+
+        {/* 装飾：歯車 */}
+        <g transform="translate(45, 60)">
+          <circle cx="0" cy="0" r="15" fill="#FFD54F" />
+          <circle cx="0" cy="0" r="8" fill="#F9A825" />
+          <rect x="-3" y="-18" width="6" height="8" fill="#FFD54F" />
+          <rect x="-3" y="10" width="6" height="8" fill="#FFD54F" />
+          <rect x="-18" y="-3" width="8" height="6" fill="#FFD54F" />
+          <rect x="10" y="-3" width="8" height="6" fill="#FFD54F" />
+        </g>
+
+        {/* 装飾：電球 */}
+        <g transform="translate(195, 70)">
+          <circle cx="0" cy="0" r="12" fill="#FFD54F" />
+          <rect x="-5" y="10" width="10" height="6" rx="2" fill="#F9A825" />
+          <line x1="0" y1="-20" x2="0" y2="-14" stroke="#F9A825" strokeWidth="2" />
+          <line x1="-12" y1="-12" x2="-8" y2="-8" stroke="#F9A825" strokeWidth="2" />
+          <line x1="12" y1="-12" x2="8" y2="-8" stroke="#F9A825" strokeWidth="2" />
+        </g>
+
+        {/* 装飾：キラキラ */}
+        <g fill="#48CAE4">
+          <circle cx="55" cy="140" r="4" />
+          <circle cx="185" cy="130" r="3" />
+          <circle cx="175" cy="155" r="5" />
+          <circle cx="65" cy="170" r="3" />
+        </g>
+      </svg>
+    );
+
+    const AIIllustration = () => (
+      <svg viewBox="0 0 160 120" className="w-32 h-24 mx-auto">
+        {/* 中央のAIロボット */}
+        <circle cx="80" cy="60" r="35" fill="#E0F7F6" stroke="#00B4D8" strokeWidth="2" />
+
+        {/* ロボット顔 */}
+        <rect x="60" y="45" width="40" height="35" rx="8" fill="#00B4D8" />
+        <rect x="65" y="50" width="30" height="20" rx="5" fill="#FFF" />
+        <circle cx="73" cy="58" r="4" fill="#333" />
+        <circle cx="87" cy="58" r="4" fill="#333" />
+        <path d="M70 68 Q80 74 90 68" stroke="#333" strokeWidth="2" fill="none" strokeLinecap="round" />
+
+        {/* アンテナ */}
+        <line x1="80" y1="45" x2="80" y2="35" stroke="#00B4D8" strokeWidth="3" />
+        <circle cx="80" cy="32" r="5" fill="#F9A825" />
+
+        {/* 接続線 */}
+        <line x1="45" y1="60" x2="20" y2="40" stroke="#48CAE4" strokeWidth="2" strokeDasharray="4" />
+        <line x1="115" y1="60" x2="140" y2="40" stroke="#48CAE4" strokeWidth="2" strokeDasharray="4" />
+        <line x1="45" y1="70" x2="20" y2="90" stroke="#48CAE4" strokeWidth="2" strokeDasharray="4" />
+        <line x1="115" y1="70" x2="140" y2="90" stroke="#48CAE4" strokeWidth="2" strokeDasharray="4" />
+
+        {/* 周辺アイコン */}
+        <circle cx="20" cy="40" r="10" fill="#FFD54F" />
+        <circle cx="140" cy="40" r="10" fill="#48CAE4" />
+        <circle cx="20" cy="90" r="10" fill="#00B4D8" />
+        <circle cx="140" cy="90" r="10" fill="#F9A825" />
+      </svg>
+    );
+
+    // メインコンポーネント
+    function StudyGoPersonal() {
+      const [step, setStep] = useState(0); // 0: ランディング, 1: 質問, 2: 結果
+      const [questionStep, setQuestionStep] = useState(1);
+      const [formData, setFormData] = useState({ purpose: "", area: "", budget: "", name: "" });
+      const [stores, setStores] = useState([]);
+      const [plans, setPlans] = useState([]);
+      const [selectedStore, setSelectedStore] = useState(null);
+      const [selectedPlan, setSelectedPlan] = useState(null);
+      const [isAnalyzing, setIsAnalyzing] = useState(false);
+      const [analysisProgress, setAnalysisProgress] = useState(0);
+      const [showConfirmation, setShowConfirmation] = useState(false);
+      const [isUsingApi, setIsUsingApi] = useState(false);
+      const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+
+      const totalQuestions = 4;
+      const purposes = ["資格取得", "スキルアップ", "転職準備", "趣味・教養"];
+      const areas = [
+        { label: "東京都", value: 13 },
+        { label: "神奈川県", value: 14 },
+        { label: "大阪府", value: 27 },
+        { label: "その他", value: 0 }
+      ];
+      const budgets = ["〜1万円", "1〜2万円", "2〜3万円", "3万円以上"];
+
+      const handleStoreSelect = async (store) => {
+        setSelectedStore(store);
+        setSelectedPlan(null);
+        setIsLoadingPlans(true);
+
+        const apiPlans = await fetchShopPlans(store.id);
+        if (apiPlans && apiPlans.length > 0) {
+          const formattedPlans = apiPlans.map((p, idx) => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            planType: p.planType,
+            subTitle: p.subTitle || "",
+            note: p.note || "",
+            recommended: idx === 0
+          }));
+          setPlans(formattedPlans);
+          setSelectedPlan(formattedPlans[0]);
+        } else {
+          setPlans(dummyPlans);
+          setSelectedPlan(dummyPlans[0]);
+        }
+        setIsLoadingPlans(false);
+      };
+
+      const handleAnalyze = async () => {
+        setIsAnalyzing(true);
+        setAnalysisProgress(0);
+
+        const selectedArea = areas.find(a => a.label === formData.area);
+        const prefectureCode = selectedArea?.value || 0;
+
+        let apiShops = null;
+        const interval = setInterval(() => {
+          setAnalysisProgress(prev => {
+            if (prev >= 100) {
+              clearInterval(interval);
+              return 100;
+            }
+            return prev + Math.random() * 12;
+          });
+        }, 200);
+
+        apiShops = await fetchShops(prefectureCode > 0 ? prefectureCode : undefined);
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        clearInterval(interval);
+        setAnalysisProgress(100);
+
+        setTimeout(async () => {
+          setIsAnalyzing(false);
+          setStep(2); // 結果画面へ
+
+          if (apiShops && apiShops.length > 0) {
+            const formattedStores = apiShops.slice(0, 5).map((s, idx) => ({
+              id: s.id,
+              name: s.name,
+              city: s.city,
+              prefecture: s.prefecture,
+              catchCopy: s.catchCopy || "",
+              reviewStar: s.reviewStar,
+              imageFileName: s.imageFileName,
+              recommended: idx === 0
+            }));
+            setStores(formattedStores);
+            setIsUsingApi(true);
+            await handleStoreSelect(formattedStores[0]);
+          } else {
+            setStores(dummyStores);
+            setPlans(dummyPlans);
+            setSelectedStore(dummyStores[0]);
+            setSelectedPlan(dummyPlans[0]);
+            setIsUsingApi(false);
+          }
+        }, 500);
+      };
+
+      const handleContract = () => {
+        setShowConfirmation(true);
+      };
+
+      const nextQuestion = () => {
+        // 名前入力の場合
+        if (questionStep === 1) {
+          const input = document.getElementById('nameInput');
+          const nameValue = input?.value?.trim() || '';
+          if (nameValue.length === 0) {
+            alert('お名前を入力してください');
+            input?.focus();
+            return;
+          }
+          setFormData(prev => ({...prev, name: nameValue}));
+          setQuestionStep(2);
+          return;
+        }
+
+        if (questionStep < totalQuestions) {
+          setQuestionStep(prev => prev + 1);
+        } else {
+          handleAnalyze();
+        }
+      };
+
+      const prevQuestion = () => {
+        if (questionStep > 1) {
+          setQuestionStep(prev => prev - 1);
+        }
+      };
+
+      // ヘッダー
+      const Header = () => (
+        <header className="bg-white shadow-sm">
+          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-studygo-cyan rounded-lg flex items-center justify-center">
+                <Icon name="GraduationCap" size={20} className="text-white" />
+              </div>
+              <span className="text-lg font-bold text-studygo-cyan">スタディGO</span>
+            </div>
+            <nav className="hidden md:flex items-center gap-6 text-sm text-studygo-textLight">
+              <a href="#" className="hover:text-studygo-cyan">会員登録</a>
+              <a href="#" className="hover:text-studygo-cyan">ログイン</a>
+            </nav>
+          </div>
+        </header>
+      );
+
+      // 質問カード
+      const QuestionCard = ({ children, title, subtitle }) => (
+        <div className="bg-white rounded-3xl shadow-lg p-6 md:p-8 max-w-xl mx-auto">
+          {/* プログレス */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-studygo-cyan rounded-lg flex items-center justify-center">
+                <Icon name="GraduationCap" size={18} className="text-white" />
+              </div>
+              <span className="font-bold text-studygo-cyan">スタディGO</span>
+            </div>
+            <span className="text-studygo-cyan font-medium">{questionStep}/{totalQuestions} 問</span>
+          </div>
+
+          {/* プログレスバー */}
+          <div className="h-2 bg-gray-100 rounded-full mb-8 overflow-hidden">
+            <div
+              className="h-full bg-studygo-cyan rounded-full transition-all duration-500"
+              style={{ width: `${(questionStep / totalQuestions) * 100}%` }}
+            />
+          </div>
+
+          {title && <h2 className="text-xl font-bold text-studygo-text mb-2">{title}</h2>}
+          {subtitle && <p className="text-studygo-textMuted mb-6">{subtitle}</p>}
+          {children}
+        </div>
+      );
+
+      // 質問の有効性チェック
+      const getQuestionValidity = () => {
+        switch(questionStep) {
+          case 1: return true; // 名前は次へボタンクリック時にチェック
+          case 2: return formData.purpose.length > 0;
+          case 3: return formData.area.length > 0;
+          case 4: return formData.budget.length > 0;
+          default: return false;
+        }
+      };
+
+      // 質問フォームの内容をレンダリング
+      const renderQuestionContent = () => {
+        switch(questionStep) {
+          case 1:
+            return (
+              <div>
+                <input
+                  id="nameInput"
+                  type="text"
+                  defaultValue={formData.name}
+                  placeholder="山田 太郎"
+                  className="w-full px-5 py-4 border-2 border-gray-200 rounded-2xl focus:ring-2 focus:ring-studygo-cyan focus:border-studygo-cyan transition-all text-lg"
+                />
+                <p className="text-sm text-studygo-textMuted mt-2">入力後、「次へ」ボタンを押してください</p>
+              </div>
+            );
+          case 2:
+            return (
+              <div className="space-y-3">
+                {purposes.map((purpose) => (
+                  <button
+                    key={purpose}
+                    onClick={() => setFormData(prev => ({...prev, purpose}))}
+                    className={`w-full px-5 py-4 rounded-2xl border-2 transition-all flex items-center gap-4 ${
+                      formData.purpose === purpose
+                        ? 'border-studygo-cyan bg-studygo-mintLight'
+                        : 'border-gray-200 hover:border-studygo-cyanLight hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center ${
+                      formData.purpose === purpose
+                        ? 'border-studygo-cyan bg-studygo-cyan'
+                        : 'border-gray-300'
+                    }`}>
+                      {formData.purpose === purpose && <Icon name="Check" size={16} className="text-white" />}
+                    </div>
+                    <span className={`text-lg ${formData.purpose === purpose ? 'text-studygo-cyan font-medium' : 'text-studygo-text'}`}>
+                      {purpose}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            );
+          case 3:
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                {areas.map((area) => (
+                  <button
+                    key={area.label}
+                    onClick={() => setFormData(prev => ({...prev, area: area.label}))}
+                    className={`px-4 py-4 rounded-2xl border-2 transition-all ${
+                      formData.area === area.label
+                        ? 'border-studygo-cyan bg-studygo-mintLight text-studygo-cyan font-medium'
+                        : 'border-gray-200 hover:border-studygo-cyanLight text-studygo-text'
+                    }`}
+                  >
+                    {area.label}
+                  </button>
+                ))}
+              </div>
+            );
+          case 4:
+            return (
+              <div className="grid grid-cols-2 gap-3">
+                {budgets.map((budget) => (
+                  <button
+                    key={budget}
+                    onClick={() => setFormData(prev => ({...prev, budget}))}
+                    className={`px-4 py-4 rounded-2xl border-2 transition-all ${
+                      formData.budget === budget
+                        ? 'border-studygo-cyan bg-studygo-mintLight text-studygo-cyan font-medium'
+                        : 'border-gray-200 hover:border-studygo-cyanLight text-studygo-text'
+                    }`}
+                  >
+                    {budget}
+                  </button>
+                ))}
+              </div>
+            );
+          default:
+            return null;
+        }
+      };
+
+      const getQuestionTitle = () => {
+        const titles = ["Question 1", "Question 2", "Question 3", "Question 4"];
+        return titles[questionStep - 1];
+      };
+
+      const getQuestionSubtitle = () => {
+        const subtitles = [
+          "お名前を教えてください",
+          "学習の目的は何ですか？",
+          "希望エリアはどちらですか？",
+          "月額予算はどのくらいですか？"
+        ];
+        return subtitles[questionStep - 1];
+      };
+
+      // ランディング画面
+      const LandingView = () => (
+        <div className="slide-in">
+          <div className="bg-white rounded-3xl shadow-lg p-8 md:p-10 max-w-xl mx-auto text-center">
+            <StudyIllustration />
+
+            <h1 className="text-2xl md:text-3xl font-bold text-studygo-text mt-6 mb-3">
+              あなたはどの学習タイプ？<br />
+              〜最適なプランを見つけよう〜
+            </h1>
+            <p className="text-studygo-textMuted mb-8">
+              4つの質問に答えるだけ！<br />
+              AIがあなたにピッタリの学習プランを提案します
+            </p>
+
+            <button
+              onClick={() => setStep(1)}
+              className="w-full max-w-xs mx-auto py-4 bg-studygo-cyan text-white font-bold rounded-full hover:bg-studygo-cyanDark transition-all shadow-lg shadow-studygo-cyan/30 text-lg"
+            >
+              今すぐ診断スタート！
+            </button>
+          </div>
+
+          {/* 特徴カード */}
+          <div className="mt-6 max-w-md mx-auto">
+            <div className="bg-white rounded-2xl p-6 shadow-md text-center">
+              <AIIllustration />
+              <p className="text-studygo-text font-medium mt-4">
+                AI搭載であなたの学習タイプを分析
+              </p>
+              <p className="text-studygo-textMuted text-sm mt-1">
+                最適な店舗とプランをマッチング！
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+
+      // 分析中アニメーション
+      const AnalyzingAnimation = () => (
+        <div className="text-center py-8">
+          <div className="bg-white rounded-3xl shadow-lg p-8 max-w-md mx-auto">
+            <div className="relative inline-flex items-center justify-center mb-8">
+              <div className="absolute w-28 h-28 bg-studygo-mintLight rounded-full pulse-ring"></div>
+              <div className="absolute w-20 h-20 bg-studygo-mint rounded-full pulse-ring" style={{animationDelay: '0.5s'}}></div>
+              <div className="w-16 h-16 bg-studygo-cyan rounded-full flex items-center justify-center">
+                <Icon name="Brain" size={32} className="text-white" />
+              </div>
+            </div>
+
+            <h2 className="text-xl font-bold text-studygo-text mb-2">AIが分析中...</h2>
+            <p className="text-studygo-textMuted mb-6">{formData.name}さんの学習タイプを診断しています</p>
+
+            <div className="h-3 bg-gray-100 rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full bg-studygo-cyan rounded-full transition-all duration-300"
+                style={{width: `${Math.min(analysisProgress, 100)}%`}}
+              ></div>
+            </div>
+            <p className="text-sm text-studygo-textMuted">{Math.round(Math.min(analysisProgress, 100))}%</p>
+
+            <div className="mt-6 space-y-2 text-left">
+              {analysisProgress > 20 && (
+                <div className="flex items-center gap-3 fade-in">
+                  <div className="w-6 h-6 bg-studygo-cyan rounded-full flex items-center justify-center">
+                    <Icon name="Check" size={14} className="text-white" />
+                  </div>
+                  <span className="text-studygo-text">学習目的を分析中...</span>
+                </div>
+              )}
+              {analysisProgress > 45 && (
+                <div className="flex items-center gap-3 fade-in">
+                  <div className="w-6 h-6 bg-studygo-cyan rounded-full flex items-center justify-center">
+                    <Icon name="Check" size={14} className="text-white" />
+                  </div>
+                  <span className="text-studygo-text">最適な店舗を検索中...</span>
+                </div>
+              )}
+              {analysisProgress > 70 && (
+                <div className="flex items-center gap-3 fade-in">
+                  <div className="w-6 h-6 bg-studygo-cyan rounded-full flex items-center justify-center">
+                    <Icon name="Check" size={14} className="text-white" />
+                  </div>
+                  <span className="text-studygo-text">プランをマッチング中...</span>
+                </div>
+              )}
+              {analysisProgress > 90 && (
+                <div className="flex items-center gap-3 fade-in">
+                  <div className="w-6 h-6 bg-studygo-cyan rounded-full flex items-center justify-center">
+                    <Icon name="Check" size={14} className="text-white" />
+                  </div>
+                  <span className="text-studygo-text">ロードマップを生成中...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+
+      // ステップ2: 結果画面
+      const ResultView = () => (
+        <div className="slide-in space-y-6">
+          {/* 診断結果ヘッダー */}
+          <div className="bg-white rounded-3xl shadow-lg p-6 md:p-8 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-studygo-mintLight rounded-full text-studygo-cyan font-medium mb-4">
+              <Icon name="Sparkles" size={18} />
+              診断結果
+            </div>
+            <h2 className="text-2xl font-bold text-studygo-text mb-2">
+              {formData.name}さんは<br />
+              <span className="text-studygo-cyan">【{formData.purpose}型】</span>学習タイプ！
+            </h2>
+            <p className="text-studygo-textMuted">
+              あなたにピッタリの学習プランをご提案します
+            </p>
+            {isUsingApi && (
+              <span className="inline-flex items-center gap-1 mt-3 px-3 py-1 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                <Icon name="Database" size={12} />
+                実データ使用中
+              </span>
+            )}
+          </div>
+
+          {/* おすすめ店舗 */}
+          <div className="bg-white rounded-3xl shadow-lg p-6">
+            <h3 className="text-lg font-bold text-studygo-text mb-4 flex items-center gap-2">
+              <Icon name="MapPin" size={20} className="text-studygo-cyan" />
+              おすすめ店舗
+            </h3>
+            <div className="space-y-3">
+              {stores.slice(0, 3).map((store, idx) => (
+                <div
+                  key={store.id}
+                  onClick={() => handleStoreSelect(store)}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                    selectedStore?.id === store.id
+                      ? 'border-studygo-cyan bg-studygo-mintLight'
+                      : 'border-gray-100 hover:border-studygo-cyanLight bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-14 h-14 bg-studygo-mint rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
+                      🏢
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-studygo-text truncate">{store.name}</span>
+                        {idx === 0 && (
+                          <span className="px-2 py-0.5 bg-studygo-orange text-white text-xs font-medium rounded-full flex-shrink-0">
+                            おすすめ
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 text-sm text-studygo-textMuted mb-1">
+                        <Icon name="MapPin" size={14} />
+                        <span>{prefectureNames[store.prefecture]} {store.city}</span>
+                      </div>
+                      {store.reviewStar && (
+                        <div className="flex items-center gap-1 text-sm text-studygo-orange">
+                          <Icon name="Star" size={14} />
+                          <span>{(store.reviewStar / 10).toFixed(1)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      selectedStore?.id === store.id ? 'border-studygo-cyan bg-studygo-cyan' : 'border-gray-300'
+                    }`}>
+                      {selectedStore?.id === store.id && <Icon name="Check" size={14} className="text-white" />}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* おすすめプラン */}
+          <div className="bg-white rounded-3xl shadow-lg p-6">
+            <h3 className="text-lg font-bold text-studygo-text mb-4 flex items-center gap-2">
+              <Icon name="Zap" size={20} className="text-studygo-orange" />
+              おすすめプラン
+              {isLoadingPlans && <span className="text-sm text-studygo-textMuted font-normal">読み込み中...</span>}
+            </h3>
+            <div className="space-y-3">
+              {plans.map((plan, idx) => (
+                <div
+                  key={plan.id}
+                  onClick={() => setSelectedPlan(plan)}
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${
+                    selectedPlan?.id === plan.id
+                      ? 'border-studygo-cyan bg-studygo-mintLight'
+                      : 'border-gray-100 hover:border-studygo-cyanLight bg-gray-50'
+                  }`}
+                >
+                  {idx === 0 && (
+                    <div className="absolute top-0 right-0 px-3 py-1 bg-studygo-orange text-white text-xs font-medium rounded-bl-xl">
+                      AIおすすめ
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                        selectedPlan?.id === plan.id ? 'border-studygo-cyan bg-studygo-cyan' : 'border-gray-300'
+                      }`}>
+                        {selectedPlan?.id === plan.id && <Icon name="Check" size={14} className="text-white" />}
+                      </div>
+                      <div>
+                        <span className="font-bold text-studygo-text">{plan.name}</span>
+                        {plan.subTitle && <span className="ml-2 text-sm text-studygo-textMuted">({plan.subTitle})</span>}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-2xl font-bold text-studygo-cyan">¥{plan.price.toLocaleString()}</span>
+                      <span className="text-sm text-studygo-textMuted">/月</span>
+                    </div>
+                  </div>
+                  {plan.note && (
+                    <p className="text-sm text-studygo-textMuted ml-9">{plan.note}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ロードマップ */}
+          <div className="bg-white rounded-3xl shadow-lg p-6">
+            <h3 className="text-lg font-bold text-studygo-text mb-4 flex items-center gap-2">
+              <Icon name="Route" size={20} className="text-studygo-cyan" />
+              あなたの学習ロードマップ
+            </h3>
+            <div className="relative">
+              {roadmapPhases.map((phase, idx) => (
+                <div key={phase.phase} className="flex gap-4 mb-4 last:mb-0">
+                  <div className="flex flex-col items-center">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      phase.progress === 100 ? 'bg-green-500' : phase.progress > 0 ? 'bg-studygo-cyan' : 'bg-gray-200'
+                    }`}>
+                      <Icon name={phase.icon} size={20} className="text-white" />
+                    </div>
+                    {idx < roadmapPhases.length - 1 && (
+                      <div className="w-0.5 flex-1 min-h-[40px] bg-gray-200 my-2">
+                        <div className="w-full bg-studygo-cyan" style={{height: `${phase.progress}%`}}></div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 pb-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-studygo-text">Phase {phase.phase}: {phase.title}</span>
+                      <span className="text-xs text-studygo-textMuted bg-gray-100 px-2 py-0.5 rounded-full">{phase.duration}</span>
+                    </div>
+                    <ul className="space-y-1">
+                      {phase.tasks.map(task => (
+                        <li key={task} className="text-sm text-studygo-textLight flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full ${phase.progress > 0 ? 'bg-studygo-cyan' : 'bg-gray-300'}`}></span>
+                          {task}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 契約ボタン */}
+          <div className="bg-studygo-cyan rounded-3xl p-6 text-white">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm opacity-80">選択中のプラン</p>
+                <p className="text-xl font-bold">{selectedPlan?.name || "プランを選択"}</p>
+                {selectedStore && <p className="text-sm opacity-80 mt-1">@ {selectedStore.name}</p>}
+              </div>
+              <div className="text-right">
+                <p className="text-sm opacity-80">月額</p>
+                <p className="text-3xl font-bold">¥{(selectedPlan?.price || 0).toLocaleString()}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleContract}
+              disabled={!selectedStore || !selectedPlan}
+              className="w-full py-4 bg-white text-studygo-cyan font-bold rounded-full hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg text-lg"
+            >
+              このプランで学習を開始する
+            </button>
+            <p className="text-center text-sm mt-3 opacity-80">
+              14日間無料トライアル付き・いつでも解約可能
+            </p>
+          </div>
+        </div>
+      );
+
+      // 契約完了モーダル
+      const ConfirmationModal = () => (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center slide-in">
+            <div className="w-20 h-20 bg-studygo-cyan rounded-full flex items-center justify-center mx-auto mb-6">
+              <Icon name="PartyPopper" size={40} className="text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-studygo-text mb-2">お申し込み完了！</h2>
+            <p className="text-studygo-textMuted mb-6">
+              {formData.name}さんの学習がスタートします。<br />
+              一緒に目標達成を目指しましょう！
+            </p>
+
+            <div className="bg-studygo-mintLight rounded-2xl p-4 mb-6 text-left">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-studygo-textMuted">店舗</span>
+                <span className="font-medium text-studygo-text text-right text-sm">{selectedStore?.name}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-studygo-textMuted">プラン</span>
+                <span className="font-medium text-studygo-text text-right text-sm">{selectedPlan?.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-studygo-textMuted">月額料金</span>
+                <span className="font-bold text-studygo-cyan text-lg">¥{(selectedPlan?.price || 0).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowConfirmation(false);
+                setStep(0);
+                setQuestionStep(1);
+                setFormData({ purpose: "", area: "", budget: "", name: "" });
+                setSelectedStore(null);
+                setSelectedPlan(null);
+                setStores([]);
+                setPlans([]);
+              }}
+              className="w-full py-3 bg-studygo-cyan text-white font-bold rounded-full hover:bg-studygo-cyanDark transition-all"
+            >
+              デモを最初からやり直す
+            </button>
+          </div>
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen bg-studygo-mint">
+          <Header />
+
+          <main className="max-w-2xl mx-auto px-4 py-8">
+            {isAnalyzing ? (
+              <AnalyzingAnimation />
+            ) : step === 0 ? (
+              <LandingView />
+            ) : step === 1 ? (
+              <div className="slide-in">
+                <QuestionCard title={getQuestionTitle()} subtitle={getQuestionSubtitle()}>
+                  {renderQuestionContent()}
+
+                  {/* ナビゲーション */}
+                  <div className="flex items-center justify-between mt-8">
+                    <button
+                      onClick={prevQuestion}
+                      disabled={questionStep === 1}
+                      className="px-6 py-3 rounded-full border-2 border-gray-200 text-studygo-textLight hover:border-studygo-cyan hover:text-studygo-cyan transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      戻る
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => nextQuestion()}
+                      className="px-8 py-3 bg-studygo-cyan text-white font-medium rounded-full hover:bg-studygo-cyanDark transition-all shadow-lg shadow-studygo-cyan/30 cursor-pointer"
+                    >
+                      {questionStep === totalQuestions ? 'AIで分析する' : '次へ'}
+                    </button>
+                  </div>
+                </QuestionCard>
+              </div>
+            ) : (
+              <ResultView />
+            )}
+          </main>
+
+          <footer className="text-center py-6 text-sm text-studygo-textMuted">
+            <p>© 2024 スタディGO・パーソナル - デモ版</p>
+          </footer>
+
+          {showConfirmation && <ConfirmationModal />}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<StudyGoPersonal />);
+  </script>
+</body>
+</html>
